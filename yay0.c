@@ -1,15 +1,17 @@
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "yay0.h"
 
 #ifndef YAY0_BIG_ENDIAN
-  #if defined(__N64__)
+  #if defined(N64) || defined(GEKKO)
     #define YAY0_BIG_ENDIAN 1
   #else
     #define YAY0_BIG_ENDIAN 0
   #endif
 #endif
+
+#define YAY0_MATCH_LEN_MAX 273
 
 static uint32_t read_be_u32(const uint8_t *p)
 {
@@ -101,7 +103,18 @@ static int rr_read_u8(yay0_region_t *rr)
   return rr->data[rr->pos++];
 }
 
-int yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
+static int yay0_validate_magic(const uint8_t *input, size_t input_size)
+{
+  if (!input || input_size < 4)
+    return 0;
+  else
+    return input[0] == 'Y' &&
+           input[1] == 'a' &&
+           input[2] == 'y' &&
+           input[3] == '0';
+}
+
+yay0_result yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
   const uint8_t *comp_ptr, size_t comp_len, const uint8_t *raw_ptr,
   size_t raw_len, uint8_t *output, size_t output_size)
 {
@@ -125,7 +138,7 @@ int yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
 
     if (bit)
     {
-      /* literal: read one byte from raw */
+      /* Read one byte from raw */
       int v = rr_read_u8(&raw);
       if (v < 0) return YAY0_ERR_TRUNCATED;
       output[out_written++] = (uint8_t)v;
@@ -135,7 +148,7 @@ int yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
       int w, b2, distance, length, i;
       size_t src_index;
 
-      /* backreference */
+      /* Backreference */
       w = rr_read_u8(&comp);
       if (w < 0)
         return YAY0_ERR_TRUNCATED;
@@ -184,37 +197,30 @@ int yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
   return YAY0_OK;
 }
 
-int yay0_decompress(const uint8_t *input, size_t input_size, uint8_t *output,
-  size_t output_size)
+yay0_result yay0_decompress(const uint8_t *input, size_t input_size,
+  uint8_t *output, size_t output_size)
 {
   uint32_t decom_size, comp_off, raw_off, min_off;
-  const uint8_t *flag_ptr, *comp_ptr, *raw_ptr;
+  const uint8_t *comp_ptr, *raw_ptr;
   size_t flag_len = 0, comp_len, raw_len;
+  static const size_t HEADER_SIZE = 16;
   
-  /* minimal header: 16 bytes: "Yay0" + 3 * u32 */
-  const size_t HEADER_SIZE = 16;
+  /* Check magic and header size */
   if (!input || input_size < HEADER_SIZE)
     return YAY0_ERR_TRUNCATED;
-
-  /* check magic */
-  if (!yay0_is_match(input, input_size))
+  else if (!yay0_validate_magic(input, input_size))
     return YAY0_ERR_FORMAT;
 
-  /* read decompressed size */
+  /* Read decompressed size */
   decom_size = read_be_u32(input + 4);
   if ((size_t)decom_size > output_size)
     return YAY0_ERR_OUTPUT_SMALL;
 
-  /* offsets are absolute offsets from start of file */
+  /* Read offsets */
   comp_off = read_be_u32(input + 8);
   raw_off = read_be_u32(input + 12);
-
-  /* validate offsets */
   if (comp_off > input_size || raw_off > input_size)
     return YAY0_ERR_TRUNCATED;
-
-  /* compute pointers & lengths relative to entire input buffer */
-  flag_ptr = input + HEADER_SIZE;
   
   /**
    * flag region runs from offset HEADER_SIZE up to the lesser of comp_off and
@@ -230,27 +236,16 @@ int yay0_decompress(const uint8_t *input, size_t input_size, uint8_t *output,
   raw_ptr = input + raw_off;
   raw_len = input_size - raw_off;
 
-  return yay0_decompress_headerless(flag_ptr, flag_len, comp_ptr, comp_len,
-    raw_ptr, raw_len, output, (size_t)decom_size);
+  return yay0_decompress_headerless(input + HEADER_SIZE, flag_len, comp_ptr,
+    comp_len, raw_ptr, raw_len, output, (size_t)decom_size);
 }
 
-int yay0_is_match(const uint8_t *input, size_t input_size)
-{
-  if (!input || input_size < 4)
-    return 0;
-  else
-    return input[0] == 'Y' &&
-           input[1] == 'a' &&
-           input[2] == 'y' &&
-           input[3] == '0';
-}
-
-int yay0_get_decompressed_size(const uint8_t *input, size_t input_size,
+yay0_result yay0_get_decompressed_size(const uint8_t *input, size_t input_size,
   size_t *out_size)
 {
   if (!input || input_size < 8 || !out_size)
     return YAY0_ERR_TRUNCATED;
-  else if (!yay0_is_match(input, input_size))
+  else if (!yay0_validate_magic(input, input_size))
     return YAY0_ERR_FORMAT;
   else
   {
@@ -314,8 +309,6 @@ static int enc_mischarsearch(const unsigned char *pattern, int patternlen,
   }
   return result;
 }
-
-#define YAY0_MATCH_LEN_MAX 273
 
 static void enc_search(unsigned cur_pos, int buf_end, int *match_pos_out,
   unsigned *match_len_out)
@@ -394,8 +387,8 @@ static void enc_search(unsigned cur_pos, int buf_end, int *match_pos_out,
   }
 }
 
-int yay0_compress(const uint8_t *input, size_t input_size,
-                  uint8_t **output, size_t *output_size)
+yay0_result yay0_compress(const uint8_t *input, size_t input_size,
+  uint8_t **output, size_t *output_size)
 {
   /* local variables modeled after your program */
   unsigned int v0;

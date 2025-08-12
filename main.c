@@ -6,51 +6,66 @@
 
 static unsigned char *read_file(const char *path, size_t *out_size)
 {
-    FILE *f;
-    unsigned char *buf;
-    long len;
+  FILE *f;
+  unsigned char *buf;
+  long len;
 
-    *out_size = 0;
-    f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "Error: cannot open %s\n", path);
-        return NULL;
-    }
+  *out_size = 0;
+  f = fopen(path, "rb");
+  if (!f)
+  {
+    fprintf(stderr, "Error: cannot open %s\n", path);
+    return NULL;
+  }
 
-    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
-    len = ftell(f);
-    if (len < 0) { fclose(f); return NULL; }
-    if (fseek(f, 0, SEEK_SET) != 0) { fclose(f); return NULL; }
+  if (fseek(f, 0, SEEK_END) != 0)
+    goto error;
 
-    buf = (unsigned char *)malloc((size_t)len);
-    if (!buf) { fclose(f); return NULL; }
+  len = ftell(f);
+  if (len < 0)
+    goto error;
 
-    if (fread(buf, 1, (size_t)len, f) != (size_t)len) {
-        fprintf(stderr, "Error: failed to read %s\n", path);
-        free(buf);
-        fclose(f);
-        return NULL;
-    }
+  if (fseek(f, 0, SEEK_SET) != 0)
+    goto error;
 
-    fclose(f);
-    *out_size = (size_t)len;
-    return buf;
+  buf = (unsigned char*)malloc((size_t)len);
+  if (!buf)
+    goto error;
+
+  if (fread(buf, 1, (size_t)len, f) != (size_t)len)
+  {
+    fprintf(stderr, "Error: failed to read %s\n", path);
+    free(buf);
+    goto error;
+  }
+  fclose(f);
+  *out_size = (size_t)len;
+
+  return buf;
+
+error:
+  fclose(f);
+  return NULL;
 }
 
 static int write_file(const char *path, const unsigned char *data, size_t size)
 {
-    FILE *f = fopen(path, "wb");
-    if (!f) {
-        fprintf(stderr, "Error: cannot open %s for writing\n", path);
-        return 0;
-    }
-    if (fwrite(data, 1, size, f) != size) {
-        fprintf(stderr, "Error: failed to write to %s\n", path);
-        fclose(f);
-        return 0;
-    }
+  FILE *f = fopen(path, "wb");
+
+  if (!f)
+  {
+    fprintf(stderr, "Error: cannot open %s for writing\n", path);
+    return 0;
+  }
+  else if (fwrite(data, 1, size, f) != size)
+  {
+    fprintf(stderr, "Error: failed to write to %s\n", path);
     fclose(f);
-    return 1;
+    return 0;
+  }
+  fclose(f);
+
+  return 1;
 }
 
 int main(int argc, char **argv)
@@ -74,12 +89,6 @@ int main(int argc, char **argv)
 
         input_data = read_file(input_path, &input_size);
         if (!input_data) return 1;
-
-        if (!yay0_is_match(input_data, input_size)) {
-            fprintf(stderr, "Error: %s is not a Yay0 file\n", input_path);
-            free(input_data);
-            return 1;
-        }
 
         ret = yay0_get_decompressed_size(input_data, input_size, &output_size);
         if (ret != YAY0_OK) {
