@@ -29,11 +29,7 @@ yay0_result yay0_get_decompressed_size(const uint8_t *input, size_t input_size,
   size_t *out_size);
 
 yay0_result yay0_decompress(const uint8_t *input, size_t input_size,
-  uint8_t *output, size_t output_size);
-
-yay0_result yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
-  const uint8_t *comp_ptr, size_t comp_len, const uint8_t *raw_ptr,
-  size_t raw_len, uint8_t *output, size_t output_size);
+  uint8_t *output, size_t *output_size);
 
 yay0_result yay0_compress(const uint8_t *input, size_t input_size,
   uint8_t **output, size_t *output_size);

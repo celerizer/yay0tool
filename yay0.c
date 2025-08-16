@@ -199,12 +199,13 @@ yay0_result yay0_decompress_headerless(const uint8_t *flag_ptr, size_t flag_len,
 }
 
 yay0_result yay0_decompress(const uint8_t *input, size_t input_size,
-  uint8_t *output, size_t output_size)
+  uint8_t *output, size_t *output_size)
 {
   uint32_t decom_size, comp_off, raw_off, min_off;
   const uint8_t *comp_ptr, *raw_ptr;
   size_t flag_len = 0, comp_len, raw_len;
   static const size_t HEADER_SIZE = 16;
+  yay0_result result;
   
   /* Check magic and header size */
   if (!input || input_size < HEADER_SIZE)
@@ -214,7 +215,7 @@ yay0_result yay0_decompress(const uint8_t *input, size_t input_size,
 
   /* Read decompressed size */
   decom_size = read_be_u32(input + 4);
-  if ((size_t)decom_size > output_size)
+  if ((size_t)decom_size > *output_size)
     return YAY0_ERR_OUTPUT_SMALL;
 
   /* Read offsets */
@@ -237,8 +238,16 @@ yay0_result yay0_decompress(const uint8_t *input, size_t input_size,
   raw_ptr = input + raw_off;
   raw_len = input_size - raw_off;
 
-  return yay0_decompress_headerless(input + HEADER_SIZE, flag_len, comp_ptr,
+  result = yay0_decompress_headerless(input + HEADER_SIZE, flag_len, comp_ptr,
     comp_len, raw_ptr, raw_len, output, (size_t)decom_size);
+
+  if (result == YAY0_OK)
+  {
+    *output_size = (size_t)decom_size;
+    return YAY0_OK;
+  }
+  else
+    return result;
 }
 
 yay0_result yay0_get_decompressed_size(const uint8_t *input, size_t input_size,
