@@ -16,6 +16,9 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
+$(TEST_TARGET): $(TEST_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -23,6 +26,4 @@ clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_OBJS) $(TEST_TARGET)
 
 test: $(TEST_TARGET)
-
-$(TEST_TARGET): $(TEST_OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
+	./$(TEST_TARGET)
