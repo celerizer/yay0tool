@@ -16,6 +16,9 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
+$(TEST_TARGET): $(TEST_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
